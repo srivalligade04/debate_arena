@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Debate Arena — Multi-Agent Claude</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e18;
+    --surface: #16162a;
+    --surface2: #1e1e36;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8e6f0;
+    --muted: #888;
+    --pro: #378ADD;
+    --pro-bg: #0d1f36;
+    --pro-border: #185FA5;
+    --opp: #D85A30;
+    --opp-bg: #2a0d0d;
+    --opp-border: #993C1D;
+    --judge: #7F77DD;
+    --judge-bg: #14102a;
+    --judge-border: #534AB7;
+    --green: #1D9E75;
+    --radius: 12px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Georgia', serif;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  .shell {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    padding: 2.5rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  header .eyebrow {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--judge);
+    margin-bottom: 1rem;
+  }
+
+  header h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    color: #fff;
+    margin-bottom: .8rem;
+  }
+
+  header p {
+    font-size: .95rem;
+    color: var(--muted);
+    max-width: 520px;
+    margin: 0 auto;
+    line-height: 1.6;
+    font-family: sans-serif;
+  }
+
+  /* ── API Key setup ── */
+  .api-setup {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 2rem;
+  }
+
+  .api-setup label {
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: .5rem;
+  }
+
+  .api-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .api-row input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    outline: none;
+    transition: border-color .2s;
+  }
+
+  .api-row input:focus { border-color: var(--judge); }
+
+  .api-row button {
+    background: var(--judge-bg);
+    border: 1px solid var(--judge-border);
+    border-radius: 8px;
+    color: var(--judge);
+    font-family: sans-serif;
+    font-size: 13px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: background .2s;
+    white-space: nowrap;
+  }
+
+  .api-row button:hover { background: #1e1a3e; }
+
+  .api-note {
+    font-family: sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: .6rem;
+  }
+
+  .api-note a { color: var(--pro); text-decoration: none; }
+  .api-note a:hover { text-decoration: underline; }
+
+  .key-saved {
+    display: none;
+    font-family: sans-serif;
+    font-size: 13px;
+    color: var(--green);
+    margin-top: .5rem;
+  }
+
+  /* ── Agent cards ── */
+  .agents {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 2rem;
+  }
+
+  .agent-card {
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .agent-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .agent-card.pro { background: var(--pro-bg); border-color: var(--pro-border); }
+  .agent-card.pro::before { background: var(--pro); }
+  .agent-card.opp { background: var(--opp-bg); border-color: var(--opp-border); }
+  .agent-card.opp::before { background: var(--opp); }
+  .agent-card.judge { background: var(--judge-bg); border-color: var(--judge-border); }
+  .agent-card.judge::before { background: var(--judge); }
+
+  .agent-name {
+    font-family: sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+
+  .agent-card.pro .agent-name { color: var(--pro); }
+  .agent-card.opp .agent-name { color: var(--opp); }
+  .agent-card.judge .agent-name { color: var(--judge); }
+
+  .agent-role {
+    font-family: sans-serif;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .agent-status {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    min-height: 16px;
+    color: var(--muted);
+  }
+
+  .agent-card.pro .agent-status.active { color: var(--pro); }
+  .agent-card.opp .agent-status.active { color: var(--opp); }
+  .agent-card.judge .agent-status.active { color: var(--judge); }
+
+  /* ── Controls ── */
+  .controls {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .topic-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+
+  .topic-row input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 11px 14px;
+    color: var(--text);
+    font-family: 'Georgia', serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color .2s;
+  }
+
+  .topic-row input:focus { border-color: var(--pro); }
+  .topic-row input::placeholder { color: var(--muted); font-style: italic; }
+
+  .btn-debate {
+    background: linear-gradient(135deg, #185FA5, #1D9E75);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-family: sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 24px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity .2s, transform .1s;
+  }
+
+  .btn-debate:hover { opacity: .9; }
+  .btn-debate:active { transform: scale(.98); }
+  .btn-debate:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  .rounds-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 1rem;
+  }
+
+  .rounds-row label {
+    font-family: sans-serif;
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .rounds-row input[type=range] {
+    flex: 1;
+    max-width: 160px;
+    accent-color: var(--judge);
+  }
+
+  .rounds-val {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: var(--judge);
+    min-width: 14px;
+  }
+
+  .presets {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .preset {
+    font-family: sans-serif;
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+  }
+
+  .preset:hover { border-color: var(--judge); color: var(--judge); }
+
+  /* ── Transcript ── */
+  .transcript-wrap {
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .transcript-header {
+    background: var(--surface);
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .transcript-header span {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .status-pill {
+    font-family: sans-serif;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+  }
+
+  .status-pill.running { border-color: var(--judge); color: var(--judge); }
+  .status-pill.done { border-color: var(--green); color: var(--green); }
+  .status-pill.error { border-color: var(--opp); color: var(--opp); }
+
+  .transcript-body {
+    background: var(--bg);
+    padding: 1.4rem;
+    min-height: 120px;
+    max-height: 600px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .transcript-body::-webkit-scrollbar { width: 4px; }
+  .transcript-body::-webkit-scrollbar-track { background: transparent; }
+  .transcript-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .empty {
+    font-family: sans-serif;
+    font-size: 14px;
+    color: var(--muted);
+    text-align: center;
+    padding: 3rem 0;
+    font-style: italic;
+  }
+
+  /* ── Messages ── */
+  .msg {
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    font-size: 14px;
+    line-height: 1.7;
+    font-family: sans-serif;
+  }
+
+  .msg-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .msg-label::before {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+
+  .msg-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+    font-family: 'Georgia', serif;
+    font-size: 14px;
+    line-height: 1.75;
+  }
+
+  .msg.pro {
+    background: var(--pro-bg);
+    border: 1px solid var(--pro-border);
+    border-left-width: 3px;
+  }
+  .msg.pro .msg-label { color: var(--pro); }
+  .msg.pro .msg-label::before { background: var(--pro); }
+
+  .msg.opp {
+    background: var(--opp-bg);
+    border: 1px solid var(--opp-border);
+    border-left-width: 3px;
+  }
+  .msg.opp .msg-label { color: var(--opp); }
+  .msg.opp .msg-label::before { background: var(--opp); }
+
+  .msg.judge {
+    background: var(--judge-bg);
+    border: 1px solid var(--judge-border);
+    border-left-width: 3px;
+  }
+  .msg.judge .msg-label { color: var(--judge); }
+  .msg.judge .msg-label::before { background: var(--judge); }
+
+  .msg.system {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+  }
+  .msg.system .msg-label { color: var(--muted); }
+  .msg.system .msg-label::before { background: var(--muted); }
+
+  .msg.error {
+    background: #200a0a;
+    border: 1px solid var(--opp-border);
+    border-left-width: 3px;
+  }
+  .msg.error .msg-label { color: var(--opp); }
+  .msg.error .msg-label::before { background: var(--opp); }
+
+  .round-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .round-divider::before,
+  .round-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border2);
+  }
+
+  .typing {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    padding: 2px 0;
+  }
+
+  .typing span {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: bounce .9s ease-in-out infinite;
+  }
+
+  .typing span:nth-child(2) { animation-delay: .15s; }
+  .typing span:nth-child(3) { animation-delay: .3s; }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+    40% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-family: sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  footer a { color: var(--pro); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    .agents { grid-template-columns: 1fr; }
+    .topic-row { flex-direction: column; }
+    .btn-debate { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div class="eyebrow">Multi-Agent System · Claude API</div>
+    <h1>AI Debate Arena</h1>
+    <p>Three independent Claude agents — a Proponent, an Opponent, and a Judge — argue any topic across multiple rounds. Each agent has its own mandate and sees only what the orchestrator feeds it.</p>
+  </header>
+
+  <!-- API Key -->
+  <div class="api-setup">
+    <label>Anthropic API Key</label>
+    <div class="api-row">
+      <input type="password" id="api-key" placeholder="sk-ant-api03-…" autocomplete="off"/>
+      <button onclick="saveKey()">Save key</button>
+    </div>
+    <div class="api-note">
+      Get yours at <a href="https://console.anthropic.com/keys" target="_blank">console.anthropic.com/keys</a> — key stays in your browser only, never sent anywhere except Anthropic's API.
+    </div>
+    <div class="key-saved" id="key-saved">✓ Key saved for this session</div>
+  </div>
+
+  <!-- Agent status cards -->
+  <div class="agents">
+    <div class="agent-card pro">
+      <div class="agent-name">Proponent</div>
+      <div class="agent-role">Argues in favour · never concedes</div>
+      <div class="agent-status" id="pro-status">Waiting…</div>
+    </div>
+    <div class="agent-card opp">
+      <div class="agent-name">Opponent</div>
+      <div class="agent-role">Rebuts directly · targets claims</div>
+      <div class="agent-status" id="opp-status">Waiting…</div>
+    </div>
+    <div class="agent-card judge">
+      <div class="agent-name">Judge</div>
+      <div class="agent-role">Evaluates reasoning · delivers verdict</div>
+      <div class="agent-status" id="judge-status">Waiting…</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="topic-row">
+      <input type="text" id="topic-input" placeholder="Enter a proposition or topic to debate…"/>
+      <button class="btn-debate" id="run-btn" onclick="startDebate()">Start debate</button>
+    </div>
+
+    <div class="rounds-row">
+      <label>Rounds</label>
+      <input type="range" id="rounds-slider" min="1" max="4" value="2" step="1"
+        oninput="document.getElementById('rounds-val').textContent = this.value"/>
+      <span class="rounds-val" id="rounds-val">2</span>
+    </div>
+
+    <div class="presets">
+      <button class="preset" onclick="usePreset(this)">AI will eliminate more jobs than it creates</button>
+      <button class="preset" onclick="usePreset(this)">Social media does more harm than good</button>
+      <button class="preset" onclick="usePreset(this)">Universal basic income should be implemented globally</button>
+      <button class="preset" onclick="usePreset(this)">Nuclear energy is essential for a green future</button>
+      <button class="preset" onclick="usePreset(this)">Remote work is better than office work</button>
+      <button class="preset" onclick="usePreset(this)">Smartphones have made us less intelligent</button>
+    </div>
+  </div>
+
+  <!-- Transcript -->
+  <div class="transcript-wrap">
+    <div class="transcript-header">
+      <span>Debate transcript</span>
+      <span class="status-pill" id="status-pill">Idle</span>
+    </div>
+    <div class="transcript-body" id="transcript-body">
+      <div class="empty">Enter a topic above and start the debate to see the agents argue in real time.</div>
+    </div>
+  </div>
+
+  <footer>
+    Built with the <a href="https://docs.anthropic.com" target="_blank">Claude API</a> — three separate claude-sonnet-4-6 instances,
+    zero backend, pure browser JS.<br>
+    Part of the article <em>"I Built a Debate Arena Inside Claude — and Let AI Argue Itself"</em>
+  </footer>
+
+</div>
+
+<script>
+let apiKey = '';
+let running = false;
+
+function saveKey() {
+  const val = document.getElementById('api-key').value.trim();
+  if (!val.startsWith('sk-')) {
+    alert('That doesn\'t look like a valid Anthropic API key (should start with sk-).');
+    return;
+  }
+  apiKey = val;
+  document.getElementById('key-saved').style.display = 'block';
+}
+
+function usePreset(btn) {
+  document.getElementById('topic-input').value = btn.textContent;
+}
+
+function setStatus(state, text) {
+  const pill = document.getElementById('status-pill');
+  pill.className = 'status-pill ' + state;
+  pill.textContent = text;
+}
+
+function setAgentStatus(id, text, active) {
+  const el = document.getElementById(id + '-status');
+  el.textContent = text;
+  el.className = 'agent-status' + (active ? ' active' : '');
+}
+
+function addDivider(text) {
+  const body = document.getElementById('transcript-body');
+  body.querySelectorAll('.empty').forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'round-divider';
+  el.textContent = text;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+
+function addMsg(type, label, text) {
+  const body = document.getElementById('transcript-body');
+  body.querySelectorAll('.empty').forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'msg ' + type;
+  el.innerHTML = `<div class="msg-label">${label}</div><div class="msg-text">${esc(text)}</div>`;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+
+function addTyping(type, label) {
+  const body = document.getElementById('transcript-body');
+  body.querySelectorAll('.empty').forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'msg ' + type;
+  el.id = 'typing-indicator';
+  el.innerHTML = `<div class="msg-label">${label}</div><div class="msg-text"><span class="typing"><span></span><span></span><span></span></span></div>`;
+  body.appendChild(el);
+  body.scrollTop = body.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+async function callClaude(system, messages) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system,
+      messages
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `API error ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.content.filter(b => b.type === 'text').map(b => b.text).join('');
+}
+
+async function startDebate() {
+  if (running) return;
+
+  if (!apiKey) {
+    alert('Please enter and save your Anthropic API key first.');
+    return;
+  }
+
+  const topic = document.getElementById('topic-input').value.trim();
+  if (!topic) {
+    alert('Please enter a debate topic.');
+    return;
+  }
+
+  const rounds = parseInt(document.getElementById('rounds-slider').value);
+
+  running = true;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Debating…';
+
+  document.getElementById('transcript-body').innerHTML = '';
+  setStatus('running', 'Running');
+  setAgentStatus('pro', 'Waiting…', false);
+  setAgentStatus('opp', 'Waiting…', false);
+  setAgentStatus('judge', 'Waiting…', false);
+
+  const PRO_SYSTEM = `You are the Proponent in a formal debate. Your sole job is to argue strongly and persuasively IN FAVOUR of the topic given to you.
+
+Rules:
+- Never concede the topic or admit the other side has merit
+- Build on prior rounds — escalate and deepen your case, do not repeat yourself
+- Use concrete evidence, statistics, historical examples, and logical reasoning
+- Keep each argument to 3–4 focused paragraphs
+- Open each round with a direct rebuttal to the opponent's last point (rounds 2+), then advance your own case
+- Write in confident, direct prose`;
+
+  const OPP_SYSTEM = `You are the Opponent in a formal debate. Your sole job is to argue forcefully AGAINST the topic given to you.
+
+Rules:
+- Never concede the topic or admit the proponent makes good points
+- Directly rebut the Proponent's specific claims — quote or paraphrase them before attacking
+- Build on prior rounds — sharpen your critique, do not repeat yourself
+- Use concrete counter-evidence, historical precedent, and logical dismantling
+- Keep each argument to 3–4 focused paragraphs
+- Write in confident, direct prose`;
+
+  const JUDGE_SYSTEM = `You are an impartial Judge evaluating a formal debate. You have watched every round.
+
+Your verdict must:
+1. Open with a 1-sentence summary of how the debate unfolded
+2. Identify the 2–3 strongest arguments made (specify which side made them and in which round)
+3. Identify the key turning point or decisive exchange
+4. Declare a winner — be decisive, do not hedge or call it a draw unless truly warranted
+5. Explain in 2–3 sentences why that side won
+6. End with a numerical score e.g. "Final score: Proponent 8 – Opponent 6"
+
+Evaluate on: quality of reasoning, use of evidence, effectiveness of rebuttals, and logical consistency. Rhetoric and passion are secondary to argument quality.`;
+
+  const proHistory = [];
+  const oppHistory = [];
+  const fullTranscript = [];
+
+  addMsg('system', 'Topic', `"${topic}" — ${rounds} round${rounds > 1 ? 's' : ''}`);
+
+  try {
+    for (let r = 1; r <= rounds; r++) {
+      addDivider(`Round ${r} of ${rounds}`);
+
+      // — Proponent —
+      setAgentStatus('pro', `Round ${r} — thinking…`, true);
+
+      const proPrompt = r === 1
+        ? `The debate topic is: "${topic}"\n\nMake your opening argument in favour of this proposition. Be persuasive, specific, and confident.`
+        : `The debate topic is: "${topic}"\n\nThis is round ${r}. The Opponent just argued:\n\n${oppHistory[oppHistory.length - 1].content}\n\nFirst rebut their specific claims directly, then advance and deepen your own case.`;
+
+      proHistory.push({ role: 'user', content: proPrompt });
+
+      addTyping('pro', `Proponent · Round ${r}`);
+      const proArg = await callClaude(PRO_SYSTEM, proHistory);
+      removeTyping();
+
+      proHistory.push({ role: 'assistant', content: proArg });
+      fullTranscript.push(`=== ROUND ${r} — PROPONENT ===\n${proArg}`);
+      setAgentStatus('pro', `Round ${r} — done`, false);
+      addMsg('pro', `Proponent · Round ${r}`, proArg);
+
+      // — Opponent —
+      setAgentStatus('opp', `Round ${r} — thinking…`, true);
+
+      const oppPrompt = r === 1
+        ? `The debate topic is: "${topic}"\n\nThe Proponent just made this opening argument:\n\n${proArg}\n\nMake your opening counter-argument against this proposition. Rebut their specific claims and advance your own case.`
+        : `The debate topic is: "${topic}"\n\nThis is round ${r}. The Proponent just argued:\n\n${proArg}\n\nRebut their specific claims directly, then sharpen and deepen your opposition.`;
+
+      oppHistory.push({ role: 'user', content: oppPrompt });
+
+      addTyping('opp', `Opponent · Round ${r}`);
+      const oppArg = await callClaude(OPP_SYSTEM, oppHistory);
+      removeTyping();
+
+      oppHistory.push({ role: 'assistant', content: oppArg });
+      fullTranscript.push(`=== ROUND ${r} — OPPONENT ===\n${oppArg}`);
+      setAgentStatus('opp', `Round ${r} — done`, false);
+      addMsg('opp', `Opponent · Round ${r}`, oppArg);
+    }
+
+    // — Judge —
+    addDivider('Judge deliberating');
+    setAgentStatus('judge', 'Reading transcript…', true);
+
+    const judgePrompt = `The debate topic was: "${topic}"\n\nHere is the complete transcript of all ${rounds} round${rounds > 1 ? 's' : ''}:\n\n${fullTranscript.join('\n\n')}\n\nDeliver your verdict now.`;
+
+    addTyping('judge', 'Judge · Verdict');
+    const verdict = await callClaude(JUDGE_SYSTEM, [{ role: 'user', content: judgePrompt }]);
+    removeTyping();
+
+    setAgentStatus('judge', 'Verdict delivered', false);
+    addMsg('judge', 'Judge · Verdict', verdict);
+
+    setStatus('done', 'Complete');
+    setAgentStatus('pro', 'Debate complete', false);
+    setAgentStatus('opp', 'Debate complete', false);
+
+  } catch (e) {
+    removeTyping();
+    addMsg('error', 'Error', e.message + '\n\nCheck your API key and try again.');
+    setStatus('error', 'Error');
+    setAgentStatus('pro', 'Error', false);
+    setAgentStatus('opp', 'Error', false);
+    setAgentStatus('judge', 'Error', false);
+  }
+
+  running = false;
+  btn.disabled = false;
+  btn.textContent = 'Start debate';
+}
+
+document.getElementById('topic-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startDebate();
+});
+</script>
+</body>
+</html>
